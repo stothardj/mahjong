@@ -1,0 +1,13 @@
+* Mahjong 
+
+** Usage
+
+** Installation
+
+** Author
+
++ Jake Stothard (stothardj@gmail.com)
+
+** Copyright
+
+Copyright (c) 2023 Jake Stothard (stothardj@gmail.com)
