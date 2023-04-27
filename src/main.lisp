@@ -1,24 +1,33 @@
 (defpackage mahjong
   (:import-from :alexandria :length= :shuffle :when-let)
-  (:import-from :trivia :match)
   (:use :cl))
 (in-package :mahjong)
 
+(defparameter *honorary* '(:winds :dragons))
 (defparameter *suites* '(:dots :bamboo :characters))
 (defparameter *winds* '(:north :south :east :west))
 (defparameter *dragons* '(:red :green :white))
 
-(defstruct tile
-  "An individual tile.
+(defclass tile ()
+  ((face
+    :initarg :face
+    :accessor tile-face
+    :documentation "Face such as :dots or :winds")
+   (value
+    :initarg :value
+    :accessor tile-value
+    :documentation "Value is a number for suites or something like :west"))
+  (:documentation "An individual tile"))
 
-Suites faces are :dots, :bamboo, and :characters.
-Honorary faces are :winds and :dragons
+(defmethod print-object ((obj tile) stream)
+  (print-unreadable-object (obj stream :type t)
+    (with-accessors ((f tile-face)
+                     (v tile-value))
+        obj
+      (format stream "~a ~a" f v))))
 
-Suites values are a number from 1 to 9.
-:winds values are :north, :south, :east, and :west
-:dragons values are :red, :green, and :white"
-  face
-  value)
+(defclass suite-tile (tile) ())
+(defclass honorary-tile (tile) ())
 
 (defun honorary-members (face)
   "Return all members of an honorary face."
@@ -26,41 +35,50 @@ Suites values are a number from 1 to 9.
 
 (defun honoraryp (face)
   "Whether the face is an honorary."
-  (or (eq :winds face) (eq :dragons face)))
+  (find face *honorary*))
 
 (defun suitesp (face)
   "Whether the face is a suite."
-  (or (eq :dots face) (eq :bamboo face) (eq :characters face)))
+  (find face *suites*))
+
+(defun make-suite-tile (face value)
+  (if (typep value 'integer)
+      (make-instance 'suite-tile :face face :value value)
+      (error "Attempted to construct ~a tile with non-integer value: ~a" face value)))
 
 (defun make-dots-tile (value)
-  (make-tile :face :dots :value value))
+  (make-suite-tile :dots value))
 
 (defun make-bamboo-tile (value)
-  (make-tile :face :bamboo :value value))
+  (make-suite-tile :bamboo value))
 
 (defun make-characters-tile (value)
-  (make-tile :face :characters :value value))
+  (make-suite-tile :characters value))
+
+(defun make-honorary-tile (face value)
+  (if (find value (honorary-members face))
+      (make-instance 'honorary-tile :face face :value value)
+      (error "Attempted to construct ~a tile with invalid value ~a" face value)))
 
 (defun make-winds-tile (direction)
-  (make-tile :face :winds :value direction))
+  (make-honorary-tile :winds direction))
 
 (defun make-dragons-tile (color)
-  (make-tile :face :dragons :value color))
+  (make-honorary-tile :dragons color))
 
-(defun inc-tile (ti)
-  "Return suites tile with a value one greater."
-  (if (honoraryp (tile-face ti))
-      (error "Attempted to increment an honorary tile.")
-      (match ti
-        ((tile :face f :value v)
-         (make-tile :face f :value (1+ v))))))
+(defgeneric inc-tile (obj)
+  (:documentation "Return suites tile with a value one greater.")
+  (:method ((obj suite-tile))
+    (with-accessors ((f tile-face) (v tile-value))
+        obj
+      (make-instance 'suite-tile :face f :value (1+ v)))))
 
-(defun tile-comparator-value (tile)
-  (with-accessors ((f tile-face) (v tile-value))
-      tile
-    (if (honoraryp f)
-        (position v (honorary-members f))
-        v)))
+(defgeneric tile-comparator-value (obj)
+  (:documentation "Return the key for sorting the tile.")
+  (:method ((obj suite-tile))
+    (tile-value obj))
+  (:method ((obj honorary-tile))
+    (position (tile-value obj) (honorary-members (tile-face obj)))))
 
 (defun sort-tiles (ls)
   (sort ls #'< :key #'tile-comparator-value))
@@ -94,8 +112,7 @@ Suites values are a number from 1 to 9.
     :accessor revealed
     :documentation "Tiles the player has shown, grouped into sets.")
    )
-  (:documentation "Tiles held by an individual."
-))
+  (:documentation "Tiles held by an individual."))
 
 (defun make-hand (tiles)
   "Make a hand from a list of TILES. All tiles are held, not revealed."
@@ -305,7 +322,7 @@ Each parameter is a p-list with the :sets that were able to be created and the :
   (let* ((suites
            (loop for s in *suites*
                  nconc (loop for n from 1 to 10
-                             collect (make-tile :face s :value n))))
+                             collect (make-instance 'suite-tile :face s :value n))))
          (winds (loop for d in *winds*
                       collect (make-winds-tile d)))
          (dragons (loop for c in *dragons*

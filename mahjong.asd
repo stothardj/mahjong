@@ -2,7 +2,7 @@
   :version "0.1.0"
   :author "Jake Stothard"
   :license ""
-  :depends-on ("alexandria" "trivia")
+  :depends-on ("alexandria")
   :components ((:module "src"
                 :components
                 ((:file "main"))))
