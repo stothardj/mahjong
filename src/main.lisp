@@ -1,5 +1,5 @@
 (defpackage mahjong
-  (:import-from :alexandria :length= :shuffle :when-let)
+  (:import-from :alexandria :curry :length= :shuffle :when-let)
   (:use :cl))
 (in-package :mahjong)
 
@@ -28,6 +28,13 @@
 
 (defclass suite-tile (tile) ())
 (defclass honorary-tile (tile) ())
+
+(defun tiles-equal (t1 t2)
+  (with-accessors ((tf1 tile-face) (tv1 tile-value))
+      t1
+    (with-accessors ((tf2 tile-face) (tv2 tile-value))
+        t2
+      (and (eql tf1 tf2) (eql tv1 tv2)))))
 
 (defun honorary-members (face)
   "Return all members of an honorary face."
@@ -126,6 +133,12 @@
 (defun lookup-alist (alist key)
   (cdr (assoc key alist)))
 
+(defun holding-tilep (hand tile)
+  "Return whether HAND has TILE in held."
+  (let* ((face (tile-face tile))
+         (of-suite (lookup-alist (held hand) face)))
+    (find-if (alexandria:curry #'tiles-equal tile) of-suite)))
+
 (defun update-hand-held (hand face fn)
   (let* ((held-tiles (held hand))
          (of-suite (lookup-alist held-tiles face)))
@@ -139,7 +152,7 @@ Returns the new hand."
   (update-hand-held hand
                     (tile-face tile)
                     (lambda (of-suite)
-                      (delete tile of-suite :count 1 :test #'equalp))))
+                      (delete tile of-suite :count 1 :test #'tiles-equal))))
 
 (defun insert-into-sorted (item ls &key (test #'<) (key nil))
   "Insert ITEM into an already sorted LS."
@@ -175,14 +188,14 @@ Returns the new hand."
     while next))
 
 (defun drop-first-group (ls)
-  "Return LS with the first group of equalp elements removed."
+  "Return LS with the first group of equal tiles removed."
   (loop with f = (car ls)
         for c on ls
-        while (equalp (car c) f)
+        while (tiles-equal (car c) f)
         finally (return c)))
 
 (defun group-list (ls)
-  "Group LS with equalp elements in sublists."
+  "Group LS with equal tiles in sublists."
   (loop
     for front = ls then next
     for next = (drop-first-group front)
@@ -207,7 +220,7 @@ REMAINING must be sorted with TILE having been removed from the front."
   (when (> (length remaining) 1)
     (let ((start (subseq remaining 0 2))
           (following (nthcdr 2 remaining)))
-      (when (every (lambda (x) (equalp x tile)) start)
+      (when (every (lambda (x) (tiles-equal x tile)) start)
         (list :set (cons tile start) :remaining following)))))
 
 (defun get-chi (tile remaining)
@@ -218,7 +231,7 @@ REMAINING must be sorted with TILE having been removed from the front."
     (loop with next = (inc-tile tile) and chi = (list tile) and unused
           for xs on remaining
           for x = (first xs)
-          if (equalp next x)
+          if (tiles-equal next x)
             do (progn (setf next (inc-tile x))
                       (push x chi)
                       (when (alexandria:length= 3 chi)
@@ -236,9 +249,9 @@ REMAINING must be sorted with TILE having been removed from the front."
         finally (return best)))
 
 (defun pairp (ls)
-  "Predicate which matches a LS of two equalp elements."
+  "Predicate which matches a LS of two equal tiles."
   (and (alexandria:length= 2 ls)
-       (equalp (first ls) (second ls))))
+       (tiles-equal (first ls) (second ls))))
 
 (defun best-suite-sets (a b)
   "Return the better of the two list of sets for a single suite.
@@ -339,3 +352,23 @@ Each parameter is a p-list with the :sets that were able to be created and the :
          (p4 (subseq tiles 40 53))
          (walls (nthcdr 53 tiles)))
     (make-game walls (map 'vector #'make-hand (vector p1 p2 p3 p4)))))
+
+(defun current-hand (game)
+  "Return the hand of the current player in GAME."
+  (aref (hands game) (turn game)))
+
+(defun advance-turn (game)
+  "Advance GAME to the next player's turn."
+  (setf (turn game)
+        (mod (1+ (turn game)) 4)))
+
+(defun play-discard (game tile)
+  "Have the current player in GAME discard TILE."
+  (unless (eq (turn-state game) :to-discard)
+    (error "Game is in state ~a, not appropriate to discard a tile." (turn-state game)))
+  (unless (holding-tilep (current-hand game) tile)
+    (error "Player does not have ~a." tile))
+  (discard tile (current-hand game))
+  (advance-turn game)
+  (setf (turn-state game) :to-draw)
+  game)
