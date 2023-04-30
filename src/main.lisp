@@ -1,5 +1,6 @@
 (defpackage mahjong
   (:import-from :alexandria :curry :length= :shuffle :when-let)
+  (:import-from :arrow-macros :->)
   (:use :cl))
 (in-package :mahjong)
 
@@ -137,7 +138,7 @@
   "Return whether HAND has TILE in held."
   (let* ((face (tile-face tile))
          (of-suite (lookup-alist (held hand) face)))
-    (find-if (alexandria:curry #'tiles-equal tile) of-suite)))
+    (find-if (curry #'tiles-equal tile) of-suite)))
 
 (defun update-hand-held (hand face fn)
   (let* ((held-tiles (held hand))
@@ -207,7 +208,7 @@ Returns the new hand."
   (loop with sets and unused
         for g in (group-list tile-list)
         do (loop for cnk in (chunk-list 3 g)
-                 if (alexandria:length= 3 cnk)
+                 if (length= 3 cnk)
                    do (push cnk sets)
                  else
                    do (setf unused (nconc cnk unused)))
@@ -234,7 +235,7 @@ REMAINING must be sorted with TILE having been removed from the front."
           if (tiles-equal next x)
             do (progn (setf next (inc-tile x))
                       (push x chi)
-                      (when (alexandria:length= 3 chi)
+                      (when (length= 3 chi)
                         (return-from out (list :set (reverse chi)
                                                :remaining (append (reverse unused) (rest xs))))))
           else
@@ -250,7 +251,7 @@ REMAINING must be sorted with TILE having been removed from the front."
 
 (defun pairp (ls)
   "Predicate which matches a LS of two equal tiles."
-  (and (alexandria:length= 2 ls)
+  (and (length= 2 ls)
        (tiles-equal (first ls) (second ls))))
 
 (defun best-suite-sets (a b)
@@ -279,9 +280,9 @@ Each parameter is a p-list with the :sets that were able to be created and the :
     (let ((first-tile (first tile-list))
           (rest-tiles (rest tile-list))
           (possibilities nil))
-      (alexandria:when-let (peng (get-peng first-tile rest-tiles))
+      (when-let (peng (get-peng first-tile rest-tiles))
         (push (build-possibility peng) possibilities))
-      (alexandria:when-let (chi (get-chi first-tile rest-tiles))
+      (when-let (chi (get-chi first-tile rest-tiles))
         (push (build-possibility chi) possibilities))
       (let ((child (find-max-suite-sets rest-tiles)))
         (push (list :sets (getf child :sets)
@@ -345,7 +346,7 @@ Each parameter is a p-list with the :sets that were able to be created and the :
 
 (defun start-game ()
   "Generate a mahjong game instance that represents the start of the game."
-  (let* ((tiles (alexandria:shuffle (generate-tiles)))
+  (let* ((tiles (shuffle (generate-tiles)))
          (p1 (subseq tiles 0 14))
          (p2 (subseq tiles 14 27))
          (p3 (subseq tiles 27 40))
@@ -360,7 +361,7 @@ Each parameter is a p-list with the :sets that were able to be created and the :
 (defun advance-turn (game)
   "Advance GAME to the next player's turn."
   (setf (turn game)
-        (mod (1+ (turn game)) 4)))
+        (-> game turn 1+ (mod 4))))
 
 (defun play-discard (game tile)
   "Have the current player in GAME discard TILE."
