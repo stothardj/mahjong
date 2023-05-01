@@ -50,9 +50,8 @@
   (find face *suites*))
 
 (defun make-suite-tile (face value)
-  (if (typep value 'integer)
-      (make-instance 'suite-tile :face face :value value)
-      (error "Attempted to construct ~a tile with non-integer value: ~a" face value)))
+  (check-type value integer)
+  (make-instance 'suite-tile :face face :value value))
 
 (defun make-dots-tile (value)
   (make-suite-tile :dots value))
@@ -64,9 +63,8 @@
   (make-suite-tile :characters value))
 
 (defun make-honorary-tile (face value)
-  (if (find value (honorary-members face))
-      (make-instance 'honorary-tile :face face :value value)
-      (error "Attempted to construct ~a tile with invalid value ~a" face value)))
+  (assert (find value (honorary-members face)))
+  (make-instance 'honorary-tile :face face :value value))
 
 (defun make-winds-tile (direction)
   (make-honorary-tile :winds direction))
@@ -221,7 +219,7 @@ REMAINING must be sorted with TILE having been removed from the front."
   (when (> (length remaining) 1)
     (let ((start (subseq remaining 0 2))
           (following (nthcdr 2 remaining)))
-      (when (every (lambda (x) (tiles-equal x tile)) start)
+      (when (every (curry #'tiles-equal tile) start)
         (list :set (cons tile start) :remaining following)))))
 
 (defun get-chi (tile remaining)
@@ -365,10 +363,8 @@ Each parameter is a p-list with the :sets that were able to be created and the :
 
 (defun play-discard (game tile)
   "Have the current player in GAME discard TILE."
-  (unless (eq (turn-state game) :to-discard)
-    (error "Game is in state ~a, not appropriate to discard a tile." (turn-state game)))
-  (unless (holding-tilep (current-hand game) tile)
-    (error "Player does not have ~a." tile))
+  (assert (eq (turn-state game) :to-discard))
+  (assert (holding-tilep (current-hand game) tile))
   (discard tile (current-hand game))
   (advance-turn game)
   (setf (turn-state game) :to-draw)
